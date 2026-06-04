@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>智能盲人辅助导航系统</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+     background:#f0f4f8;color:#1f2937;overflow:hidden;height:100vh;width:100vw}
+#root{width:100%;height:100%;display:flex}
+
+/* ── Sidebar ── */
+.sidebar{width:420px;min-width:420px;background:#fff;display:flex;flex-direction:column;
+  border-right:1px solid #e5e7eb;box-shadow:2px 0 16px rgba(0,0,0,.06);z-index:1000}
+.sidebar-hd{padding:18px 20px 14px;background:linear-gradient(135deg,#1a365d,#2b6cb0);color:#fff}
+.sidebar-hd h2{font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:1px}
+.sidebar-hd p{font-size:11px;opacity:.7}
+.sidebar-bd{flex:1;overflow-y:auto;padding:14px 16px}
+.sidebar-bd::-webkit-scrollbar{width:4px}
+.sidebar-bd::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:4px}
+
+.sec{margin-bottom:14px}
+.sec-lbl{font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;
+         letter-spacing:.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+
+/* Toggle buttons */
+.tgl{flex:1;padding:9px 8px;border:1.5px solid #e5e7eb;border-radius:8px;
+     background:#f9fafb;color:#6b7280;font-size:12px;font-weight:600;cursor:pointer;
+     text-align:center;display:flex;align-items:center;justify-content:center;gap:4px;
+     transition:all .2s}
+.tgl:hover{border-color:#3b82f6;background:#eff6ff}
+.tgl.s{background:#dcfce7;border-color:#22c55e;color:#166534;box-shadow:0 0 0 3px rgba(34,197,94,.2)}
+.tgl.e{background:#fef2f2;border-color:#ef4444;color:#991b1b;box-shadow:0 0 0 3px rgba(239,68,68,.2)}
+.tgl.x{background:#fef2f2;border-color:#fecaca;color:#ef4444;flex:.35}
+
+/* Coordinate rows */
+.coord{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;border:2px solid #fff;box-shadow:0 0 0 2px currentColor}
+.dot.s{background:#22c55e;color:#22c55e}
+.dot.e{background:#ef4444;color:#ef4444}
+.cl{font-size:12px;font-weight:600;min-width:26px}
+.ci{display:flex;gap:4px;flex:1}
+.cf{flex:1;padding:5px 7px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;
+    font-family:'SF Mono',Menlo,monospace;outline:none;background:#f9fafb;transition:border-color .15s}
+.cf:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.15);background:#fff}
+.cf:invalid{border-color:#ef4444;background:#fef2f2}
+
+/* Mode grid */
+.mg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+.mb{padding:9px 4px;border:1.5px solid #e5e7eb;border-radius:8px;background:#f9fafb;
+    color:#6b7280;font-size:12px;font-weight:600;cursor:pointer;text-align:center;
+    transition:all .2s}
+.mb:hover{border-color:#3b82f6;transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.08)}
+.mb.a{background:#1e3a5f;border-color:#1e3a5f;color:#fff;box-shadow:0 2px 8px rgba(30,58,95,.3)}
+
+/* Time slider */
+.ts{width:100%;-webkit-appearance:none;appearance:none;height:6px;border-radius:3px;
+    background:linear-gradient(to right,#f59e0b,#f97316,#dc2626);outline:none;margin:4px 0}
+.ts::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;
+  background:#fff;border:2px solid #1e3a5f;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.tl{display:flex;justify-content:space-between;font-size:10px;color:#6b7280;margin-top:2px}
+.td{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+
+/* Advanced toggle */
+.adt{font-size:12px;color:#3b82f6;cursor:pointer;background:none;border:none;padding:6px 0;display:block}
+.adt:hover{opacity:.8}
+.adp{padding:10px 12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:10px}
+.adp label{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;cursor:pointer}
+
+/* Buttons */
+.btn-group{display:flex;gap:6px;margin-top:4px}
+.btn-primary,.btn-secondary{flex:1;padding:13px;border:none;border-radius:10px;font-size:14px;
+  font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+  transition:all .2s}
+.btn-primary{background:linear-gradient(135deg,#1e3a5f,#2d5a87);color:#fff;
+  box-shadow:0 4px 14px rgba(30,58,95,.3)}
+.btn-primary:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(30,58,95,.4)}
+.btn-primary:disabled{opacity:.7;cursor:not-allowed;transform:none}
+.btn-secondary{background:#f0f4ff;color:#1e40af;border:1.5px solid #bfdbfe}
+.btn-secondary:hover:not(:disabled){background:#dbeafe;transform:translateY(-1px)}
+.btn-secondary:disabled{opacity:.6;cursor:not-allowed}
+.spinner{display:inline-block;width:18px;height:18px;border:2px solid rgba(255,255,255,.3);
+  border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Error / Result cards */
+.err{margin-top:10px;padding:10px 12px;background:#fef2f2;border:1px solid #fecaca;
+     border-radius:8px;color:#dc2626;font-size:12px;line-height:1.4}
+.res{margin-top:10px;padding:12px 14px;background:#f0fdf4;border:1px solid #bbf7d0;
+     border-radius:10px;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.res h4{font-size:13px;font-weight:700;color:#166534;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.rr{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px dashed rgba(0,0,0,.06)}
+.rr:last-child{border-bottom:none}
+.rk{color:#6b7280}
+.rv{font-weight:600;color:#166534}
+
+/* Comparison table */
+.ct{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+.ct th{padding:5px 4px;background:#1e3a5f;color:#fff;font-weight:600;text-align:center}
+.ct td{padding:4px;text-align:center;border-bottom:1px solid #e5e7eb}
+.ct tr:last-child td{border-bottom:none}
+.ct .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.ct .best{background:#dcfce7;font-weight:700;color:#166534}
+
+/* Map */
+.ma{flex:1;display:flex;flex-direction:column}
+.mc{flex:1;position:relative}
+.mc .leaflet-container{width:100%;height:100%}
+
+/* Legend */
+.leg{display:flex;gap:12px;padding:8px 16px;background:#fff;border-top:1px solid #e5e7eb;
+     font-size:11px;color:#6b7280;align-items:center;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:4px}
+.ll{width:22px;height:4px;border-radius:2px}
+.ld{width:10px;height:10px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px currentColor}
+
+/* Click hint */
+.hint{position:absolute;top:16px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);
+  color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;font-weight:500;
+  z-index:1000;pointer-events:none;backdrop-filter:blur(8px);
+  animation:fadeOut 2s ease 4s forwards}
+@keyframes fadeOut{to{opacity:0}}
+
+/* Loading overlay */
+.loading-overlay{position:absolute;top:0;left:0;right:0;bottom:0;
+  background:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;
+  z-index:999;backdrop-filter:blur(2px)}
+.loading-overlay .spinner{width:36px;height:36px;border-width:3px}
+
+@media(max-width:768px){
+  #root{flex-direction:column}
+  .sidebar{width:100%;min-width:0;max-height:40vh;border-right:none;border-bottom:1px solid #e5e7eb}
+  .mc{min-height:60vh}
+}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+(function(){
+'use strict';
+
+var h=React.createElement,u=React.useState,E=React.useEffect,R=React.useRef,C=React.useCallback;
+
+/* ── constants ── */
+var ORIG={sl:3.1489,sn:101.6957,el:3.1400,en:101.7000,cx:[3.1445,101.6975],z:16};
+var MODES=[
+  {id:'blind',l:'盲人',ic:'🦯'},{id:'wheelchair',l:'轮椅',ic:'♿'},
+  {id:'elderly',l:'长者',ic:'👴'},{id:'night',l:'夜间',ic:'🌙'},
+  {id:'stroller',l:'推车',ic:'👶'},{id:'balanced',l:'均衡',ic:'⚖️'},
+];
+var COL={blind:'#ef4444',wheelchair:'#f59e0b',elderly:'#8b5cf6',
+          night:'#1d4ed8',stroller:'#10b981',balanced:'#6b7280',
+          day:'#f59e0b',night_c:'#1d4ed8',path:'#2563eb'};
+var ML={};MODES.forEach(function(m){ML[m.id]=m.l;});
+
+function fmt4(v){return typeof v==='number'?v.toFixed(4):String(v)}
+function noop(){}
+
+/* ── API helper ── */
+function api(url,body){
+  return fetch('/api/'+url,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)}).then(function(r){
+      return r.json().then(function(d){
+        if(!r.ok){throw new Error(d.error||'HTTP '+r.status);}
+        return d;
+      });
+    });
+}
+
+/* ── Path animation ── */
+function animPath(m,coords,color,weight){
+  var pts=coords.map(function(c){return[c[0],c[1]];});
+  if(pts.length<2)return{stop:noop};
+  var ghost=L.polyline(pts,{color:color||'#3b82f6',weight:(weight||5)+3,
+    opacity:0.12,dashArray:'4,8'}).addTo(m);
+  var line=L.polyline([],{color:color||'#3b82f6',weight:weight||5,opacity:0}).addTo(m);
+  var si=0,drawn=[pts[0]],timer=null,dead=false;
+  function next(){
+    if(dead)return;
+    if(si>=pts.length-1){line.setLatLngs(pts);line.setStyle({opacity:0.9});if(ghost._map)m.removeLayer(ghost);return;}
+    si++;drawn.push(pts[si]);line.setLatLngs(drawn);line.setStyle({opacity:0.3+0.6*(si/(pts.length-1))});
+    timer=setTimeout(next,Math.max(8,40-pts.length));
+  }
+  next();
+  return{stop:function(){dead=true;if(timer)clearTimeout(timer);if(ghost._map)m.removeLayer(ghost);if(line._map)m.removeLayer(line);}};
+}
+
+/* ── MapView component ── */
+function MapView(p){
+  var mt=R(null),cr=R(null),mk=R([]),al=R([]),ch=R(null);
+  ch.current=p.onClick;
+
+  E(function(){
+    if(mt.current)return;
+    var m=L.map(cr.current,{center:ORIG.cx,zoom:ORIG.z,zoomControl:true});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {maxZoom:19,attribution:'&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'}).addTo(m);
+    m.on('click',function(e){if(ch.current)ch.current(e.latlng);});
+    mt.current=m;
+    return function(){mt.current&&(mt.current.remove(),mt.current=null);};
+  },[]);
+
+  E(function(){
+    var m=mt.current;if(!m)return;
+    mk.current.forEach(function(x){m.removeLayer(x);});mk.current=[];
+    var s=p.sc,e=p.ec;
+    if(s&&s.lat!=null){
+      mk.current.push(L.circleMarker([s.lat,s.lon],{radius:10,color:'#22c55e',fillColor:'#22c55e',fillOpacity:.9,weight:3}).addTo(m).bindTooltip('起点',{permanent:false}));
+    }
+    if(e&&e.lat!=null){
+      mk.current.push(L.circleMarker([e.lat,e.lon],{radius:10,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.9,weight:3}).addTo(m).bindTooltip('终点',{permanent:false}));
+    }
+    if(s&&e&&s.lat!=null&&e.lat!=null)m.fitBounds(L.latLngBounds([s.lat,s.lon],[e.lat,e.lon]).pad(0.3));
+  },[p.sc,p.ec]);
+
+  E(function(){
+    var m=mt.current;if(!m)return;
+    al.current.forEach(function(a){if(a.stop)a.stop();else if(a._map)m.removeLayer(a);});
+    al.current=[];
+    var pl=p.pl||[];
+    pl.forEach(function(pt,i){
+      if(!pt.c||pt.c.length<2)return;
+      if(pt.anim!==false){
+        al.current.push(animPath(m,pt.c,pt.color,pt.w||5));
+      }else{
+        var line=L.polyline(pt.c.map(function(a){return[a[0],a[1]];}),{
+          color:pt.color,weight:pt.w||4,opacity:.7,dashArray:pt.d?'8,10':null}).addTo(m);
+        if(pt.lb)line.bindTooltip(pt.lb,{permanent:false,direction:'top'});
+        al.current.push(line);
+      }
+    });
+    var ap=[];
+    pl.forEach(function(pt){(pt.c||[]).forEach(function(c){ap.push([c[0],c[1]]);});});
+    if(ap.length)m.fitBounds(L.latLngBounds(ap).pad(0.15));
+  },[p.pl]);
+
+  return h('div',{ref:cr,style:{height:'100%',width:'100%'}});
+}
+
+/* ── Result renderer ── */
+function renderResult(rr){
+  if(!rr)return null;
+
+  // Multi-mode comparison
+  if(rr.allModes){
+    var best=1e9,bestIdx=0;
+    rr.allModes.forEach(function(m,i){if(m.cost<best){best=m.cost;bestIdx=i;}});
+    return h('div',{className:'res'},
+      h('h4',null,'📊 六种模式对比'),
+      h('table',{className:'ct'},
+        h('thead',null,h('tr',null,h('th',null,'模式'),h('th',null,'距离'),h('th',null,'成本'),h('th',null,'节点'),h('th',null,'探索'))),
+        h('tbody',null,rr.allModes.map(function(m,i){
+          return h('tr',{key:m.mode,className:i===bestIdx?'best':''},
+            h('td',null,h('span',{className:'dot',style:{background:COL[m.mode]}}),m.l),
+            h('td',null,m.dist+'m'),h('td',null,m.cost.toFixed(1)),
+            h('td',null,m.nodes),h('td',null,m.explored));
+        }))
+      ),
+      h('div',{style:{fontSize:'11px',color:'#6b7280',marginTop:'6px',textAlign:'center'}},
+        '🥇 '+ML[MODES[bestIdx].id]+' 模式成本最低'));
+  }
+
+  // Single result
+  var rows=[
+    ['路径距离',rr.total_distance_m+' 米'],
+    ['总成本',rr.total_cost.toFixed(1)],
+    ['探索节点',rr.explored_count],
+    ['路径节点',rr.num_nodes],
+    ['算法',rr.algorithm==='bidirectional_a*'?'双向A*':'加权A*'],
+    ['成本模式',rr.dynamic_cost!=null?'时间动态':'静态'],
+  ];
+
+  var cmp=rr.cmp;
+  var cmpEls=null;
+  if(cmp&&cmp.scenarios){
+    cmpEls=cmp.scenarios.map(function(s){
+      return h('div',{key:s.name,style:{display:'flex',justifyContent:'space-between',fontSize:'11px',padding:'3px 0'}},
+        h('span',{style:{fontWeight:600,display:'flex',alignItems:'center',gap:4}},
+          h('span',{style:{display:'inline-block',width:'8px',height:'8px',borderRadius:'50%',background:s.name==='day'?COL.day:COL.night_c}}),s.label),
+        h('span',null,s.distance_m+'m · 成本 '+s.cost.toFixed(1)));
+    });
+  }
+
+  return h('div',{className:'res'},
+    h('h4',null,'✅ 路径规划成功'),
+    rows.map(function(r){return h('div',{className:'rr',key:r[0]},h('span',{className:'rk'},r[0]),h('span',{className:'rv'},r[1]));}),
+    cmpEls?h('div',{style:{marginTop:'8px',paddingTop:'8px',borderTop:'1px dashed #bbf7d0'}},
+      h('div',{style:{fontWeight:600,color:'#1e40af',fontSize:'12px',marginBottom:'4px'}},'📊 日间 vs 夜间'),cmpEls):null);
+}
+
+/* ── Panel ── */
+function Panel(p){
+  var
+    md=u('blind'),mo=md[0],sm=md[1],
+    hh=u(14),hr=hh[0],sh=hh[1],
+    ld=u(false),lg=ld[0],sl=ld[1],
+    ed=u(false),er=ed[0],se=ed[1],
+    rd=u(null),rr=rd[0],sr=rd[1],
+    cd=u(false),cv=cd[0],sc=cd[1],
+    ad=u(false),av=ad[0],sa=ad[1],
+    bd=u(true),bi=bd[0],sb=bd[1],
+    dd=u(true),dy=dd[0],sd=dd[1],
+    smd=u(true),smv=smd[0],ssm=smd[1],
+    sli=u(fmt4(p.sl)),sliv=sli[0],ssli=sli[1],
+    sni=u(fmt4(p.sn)),sniv=sni[0],ssni=sni[1],
+    eli=u(fmt4(p.el)),eliv=eli[0],ssel=eli[1],
+    eni=u(fmt4(p.en)),eniv=eni[0],ssen=eni[1];
+
+  E(function(){ssli(fmt4(p.sl));},[p.sl]);
+  E(function(){ssni(fmt4(p.sn));},[p.sn]);
+  E(function(){ssel(fmt4(p.el));},[p.el]);
+  E(function(){ssen(fmt4(p.en));},[p.en]);
+
+  function getC(){
+    var slv=parseFloat(sliv),snv=parseFloat(sniv),elv=parseFloat(eliv),env=parseFloat(eniv);
+    if(isNaN(slv)||isNaN(snv)||isNaN(elv)||isNaN(env)){se('请输入有效坐标');return null;}
+    return{start_lat:slv,start_lon:snv,end_lat:elv,end_lon:env};
+  }
+
+  function plan(){
+    var c=getC();if(!c)return;
+    sl(true);se(null);sr(null);
+    api('shortest_path',Object.assign({},c,{mode:mo,hour:hr,
+      use_bidirectional:bi,use_dynamic_cost:dy,smooth_path:smv}))
+    .then(function(res){
+      sr(res);
+      api('compare_modes',Object.assign({},c,{scenarios:[
+        {name:'day',label:'日间('+ML[mo]+')',mode:mo,hour:14,use_dynamic:true},
+        {name:'night',label:'夜间('+ML[mo]+')',mode:mo,hour:21,use_dynamic:true},
+      ]})).then(function(cr){
+        if(!cr.error)sr(function(prev){return prev?Object.assign({},prev,{cmp:cr}):null;});
+        var ap=[{c:res.path,color:COL.path,w:5,lb:'路径 '+res.total_distance_m+'m'}];
+        if(cr&&cr.scenarios)cr.scenarios.forEach(function(s,i){
+          ap.push({c:s.path,color:i===0?COL.day:COL.night_c,w:3,d:true,lb:s.label});});
+        p.onPlan({sc:{lat:c.start_lat,lon:c.start_lon},ec:{lat:c.end_lat,lon:c.end_lon},pl:ap});
+      }).catch(function(){/* non-critical */});
+    }).catch(function(e){se(e.message);}).finally(function(){sl(false);});
+  }
+
+  function compareAll(){
+    var c=getC();if(!c)return;
+    sl(true);se(null);sc(true);
+    var ap=[],results=[];
+    function next(i){
+      if(i>=MODES.length){
+        p.onPlan({sc:{lat:c.start_lat,lon:c.start_lon},ec:{lat:c.end_lat,lon:c.end_lon},pl:ap});
+        sr({allModes:results});
+        sl(false);return;
+      }
+      var m=MODES[i];
+      api('shortest_path',Object.assign({},c,{mode:m.id,hour:hr,
+        use_bidirectional:bi,use_dynamic_cost:dy,smooth_path:smv}))
+      .then(function(res){
+        results.push({mode:m.id,l:m.l+' '+m.ic,color:COL[m.id],
+          dist:res.total_distance_m,cost:res.total_cost,nodes:res.num_nodes,
+          explored:res.explored_count});
+        ap.push({c:res.path,color:COL[m.id],w:4,lb:m.l,anim:ap.length===0});
+        next(i+1);
+      }).catch(function(e){console.warn(m.id,':',e.message);next(i+1);});
+    }
+    next(0);
+  }
+
+  var hintText=p.cm==='start'?'在地图上点击选择起点':(p.cm==='end'?'在地图上点击选择终点':null);
+
+  return h('div',{className:'sidebar'},
+    h('div',{className:'sidebar-hd'},
+      h('h2',null,'🦯 智能盲人辅助导航'),
+      h('p',null,'基于加权A*的多模式智能路径规划系统')),
+    h('div',{className:'sidebar-bd'},
+
+      /* Click-mode toggles */
+      h('div',{style:{display:'flex',gap:'4px',marginBottom:'10px'}},
+        h('button',{className:'tgl'+(p.cm==='start'?' s':''),
+          onClick:function(){p.sm(p.cm==='start'?null:'start');}},'📍 点选起点'),
+        h('button',{className:'tgl'+(p.cm==='end'?' e':''),
+          onClick:function(){p.sm(p.cm==='end'?null:'end');}},'📍 点选终点'),
+        p.cm?h('button',{className:'tgl x',onClick:function(){p.sm(null);}},'✕'):null),
+      hintText?h('div',{style:{padding:'8px 12px',background:'#eff6ff',border:'1px solid #bfdbfe',
+        borderRadius:'8px',fontSize:'12px',color:'#1e40af',marginBottom:'10px',textAlign:'center',fontWeight:500}},hintText):null,
+
+      /* Coordinates */
+      h('div',{className:'sec'},
+        h('div',{className:'sec-lbl'},'📍 坐标设置'),
+        h('div',{className:'coord'},
+          h('span',{className:'dot s'}),h('span',{className:'cl'},'起点'),
+          h('div',{className:'ci'},
+            h('input',{className:'cf',value:sliv,onChange:function(e){ssli(e.target.value);p.scl('lat',e.target.value);}}),
+            h('input',{className:'cf',value:sniv,onChange:function(e){ssni(e.target.value);p.scl('lon',e.target.value);}}))),
+        h('div',{className:'coord'},
+          h('span',{className:'dot e'}),h('span',{className:'cl'},'终点'),
+          h('div',{className:'ci'},
+            h('input',{className:'cf',value:eliv,onChange:function(e){ssel(e.target.value);p.ecl('lat',e.target.value);}}),
+            h('input',{className:'cf',value:eniv,onChange:function(e){ssen(e.target.value);p.ecl('lon',e.target.value);}})))),
+
+      /* Mode */
+      h('div',{className:'sec'},
+        h('div',{className:'sec-lbl'},'👤 出行模式'),
+        h('div',{className:'mg'},MODES.map(function(m){
+          return h('button',{key:m.id,className:'mb'+(mo===m.id?' a':''),
+            onClick:function(){sm(m.id);}},m.ic+' '+m.l);}))),
+
+      /* Time */
+      h('div',{className:'sec'},
+        h('div',{className:'sec-lbl'},'🕐 出发时间'),
+        h('div',{className:'td'},
+          h('span',{style:{fontWeight:600}},hr+':00'),
+          h('span',{style:{fontSize:'11px',color:'#6b7280'}},['深夜','凌晨','清晨','上午','午后','下午','傍晚','夜间'][Math.floor(hr/3)%8])),
+        h('input',{className:'ts',type:'range',min:0,max:23,value:hr,
+          onChange:function(e){sh(parseInt(e.target.value))}}),
+        h('div',{className:'tl'},[0,6,10,14,18,21].map(function(hh){return h('span',{key:hh},hh+':00');}))),
+
+      /* Action buttons */
+      h('div',{className:'btn-group'},
+        h('button',{className:'btn-primary',disabled:lg,onClick:plan},
+          lg&&!cv?h('span',{className:'spinner'}):null,lg&&!cv?'规划中...':'🚀 规划路径'),
+        h('button',{className:'btn-secondary',disabled:lg,onClick:compareAll},
+          lg&&cv?h('span',{className:'spinner'}):null,lg&&cv?'比较中...':'📊 比较六种模式')),
+
+      /* Advanced */
+      h('button',{className:'adt',onClick:function(){sa(!av);}},av?'▲ 收起高级':'▼ 高级选项'),
+      av?h('div',{className:'adp'},
+        h('label',null,h('input',{type:'checkbox',checked:bi,onChange:function(e){sb(e.target.checked);}}),'双向A*搜索'),
+        h('label',null,h('input',{type:'checkbox',checked:dy,onChange:function(e){sd(e.target.checked);}}),'时间依赖动态成本'),
+        h('label',null,h('input',{type:'checkbox',checked:smv,onChange:function(e){ssm(e.target.checked);}}),'路径平滑处理')):null,
+
+      /* Error / Result */
+      er?h('div',{className:'err'},'❌ '+er):null,
+      renderResult(rr))
+  );
+}
+
+/* ── App ── */
+function App(){
+  var sl=u(ORIG.sl),slv=sl[0],ssl=sl[1];
+  var sn=u(ORIG.sn),snv=sn[0],ssn=sn[1];
+  var el=u(ORIG.el),elv=el[0],sel=el[1];
+  var en=u(ORIG.en),env=en[0],sen=en[1];
+  var cm=u(null),cv=cm[0],scm=cm[1];
+  var ps=u([]),psv=ps[0],sps=ps[1];
+
+  var hc=C(function(lt){
+    if(cv==='start'){ssl(parseFloat(lt.lat.toFixed(4)));ssn(parseFloat(lt.lng.toFixed(4)));scm(null);}
+    else if(cv==='end'){sel(parseFloat(lt.lat.toFixed(4)));sen(parseFloat(lt.lng.toFixed(4)));scm(null);}
+  },[cv]);
+
+  return h('div',{style:{display:'flex',width:'100%',height:'100%'}},
+    h(Panel,{
+      sl:slv,sn:snv,el:elv,en:env,
+      scl:function(f,v){var n=parseFloat(v);if(!isNaN(n)){f==='lat'?ssl(n):ssn(n);}},
+      ecl:function(f,v){var n=parseFloat(v);if(!isNaN(n)){f==='lat'?sel(n):sen(n);}},
+      cm:cv,sm:scm,onPlan:function(st){sps(st.pl||[]);}}),
+    h('div',{className:'ma'},
+      h(MapView,{sc:{lat:slv,lon:snv},ec:{lat:elv,lon:env},pl:psv,onClick:hc})));
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+})();
+</script>
+</body>
+</html>
