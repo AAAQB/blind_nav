@@ -1,6 +1,7 @@
 from __future__ import annotations
 import heapq
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 import networkx as nx
@@ -14,6 +15,22 @@ class _BiNode:
     node_id: int = field(compare=False)
     direction: int = field(compare=False)
 class BidirectionalAStar:
+    """Bidirectional A* search for accessibility-aware pathfinding.
+
+    The search expands alternately from start (forward) and goal (backward).
+    When the two frontiers meet (their closed sets intersect), the algorithm
+    evaluates the total cost through each meeting node and keeps the best.
+
+    Termination: once the minimum f-scores of BOTH frontiers exceed the
+    best known total cost, no better path can exist and the search stops.
+
+    Key differences from WeightedAStar (single-direction):
+    - Two frontiers, two g-score maps, two parent maps, two closed sets.
+    - Meeting detection via intersection of closed sets.
+    - Stale-entry filtering: nodes popped with an outdated g_score are
+      skipped (same guard as WeightedAStar, was missing in original code).
+    """
+
     def __init__(
         self,
         cost_function: Callable[[int, int, Dict[str, Any], Optional[int]], float],
@@ -25,6 +42,7 @@ class BidirectionalAStar:
         self._w = heuristic_weight
         self._radius = meet_radius
         self._max_iter = max_iterations
+
     def search(
         self,
         graph: nx.Graph,
@@ -37,21 +55,26 @@ class BidirectionalAStar:
             return None
         if start_node == goal_node:
             return {"path": [start_node], "cost": 0.0, "explored_count": 0, "meet_node": start_node}
+
         fwd_frontier: List[_BiNode] = []
         bwd_frontier: List[_BiNode] = []
         h_sg = self._heuristic(graph, start_node, goal_node)
         heapq.heappush(fwd_frontier, _BiNode(f_score=h_sg, g_score=0.0, node_id=start_node, direction=0))
         heapq.heappush(bwd_frontier, _BiNode(f_score=h_sg, g_score=0.0, node_id=goal_node, direction=1))
+
         fwd_g: Dict[int, float] = {start_node: 0.0}
         bwd_g: Dict[int, float] = {goal_node: 0.0}
         fwd_parent: Dict[int, int] = {}
         bwd_parent: Dict[int, int] = {}
+
         fwd_closed: Set[int] = set()
         bwd_closed: Set[int] = set()
+
         best_meet: Optional[int] = None
         best_cost = float("inf")
         explored = 0
         iterations = 0
+
         while (fwd_frontier or bwd_frontier) and iterations < self._max_iter:
             iterations += 1
             f_best = fwd_frontier[0].f_score if fwd_frontier else float("inf")
@@ -63,21 +86,28 @@ class BidirectionalAStar:
                 self._expand(graph, bwd_frontier, bwd_g, bwd_parent, bwd_closed,
                              hour, 1, start_node)
             explored += 1
+
+            # --- meeting detection ---
             meet, total = self._find_meeting(fwd_closed, bwd_closed, fwd_g, bwd_g,
-                                              fwd_parent, bwd_parent, best_cost)
+                                              best_cost)
             if meet is not None and total < best_cost:
                 best_meet = meet
                 best_cost = total
+
+            # --- termination: both frontiers' minima exceed best known cost ---
             if best_cost < float("inf"):
                 f_min = fwd_frontier[0].f_score if fwd_frontier else float("inf")
                 b_min = bwd_frontier[0].f_score if bwd_frontier else float("inf")
                 if f_min >= best_cost and b_min >= best_cost:
                     break
+
             if progress_callback:
                 progress_callback(explored, len(fwd_closed), len(bwd_closed))
+
         if best_meet is None:
             logger.warning("BiA* exhausted without meeting (explored=%d)", explored)
             return None
+
         path = _reconstruct_bi_path(fwd_parent, bwd_parent, best_meet, start_node, goal_node)
         logger.info("BiA* finished: explored=%d, cost=%.2f, meet=%s", explored, best_cost, best_meet)
         return {
@@ -88,6 +118,7 @@ class BidirectionalAStar:
             "forward_explored": len(fwd_closed),
             "backward_explored": len(bwd_closed),
         }
+
     def _expand(
         self,
         graph: nx.Graph,
@@ -103,8 +134,14 @@ class BidirectionalAStar:
             return
         cur = heapq.heappop(frontier)
         cid = cur.node_id
+        cg = cur.g_score
+
+        # --- stale-entry guard (same as WeightedAStar) ---
         if cid in closed:
             return
+        if cid in g_score and cg > g_score[cid]:
+            return
+
         closed.add(cid)
         for nid in graph.neighbors(cid):
             if nid in closed:
@@ -122,19 +159,19 @@ class BidirectionalAStar:
                     node_id=nid,
                     direction=direction,
                 ))
+
     @staticmethod
     def _heuristic(graph: nx.Graph, a: int, b: int) -> float:
         pa = _node_pos(graph, a)
         pb = _node_pos(graph, b)
         return math.sqrt((pa[0] - pb[0]) ** 2 + (pa[1] - pb[1]) ** 2)
+
     @staticmethod
     def _find_meeting(
         fwd_closed: Set[int],
         bwd_closed: Set[int],
         fwd_g: Dict[int, float],
         bwd_g: Dict[int, float],
-        fwd_parent: Dict[int, int],
-        bwd_parent: Dict[int, int],
         best_so_far: float,
     ) -> Tuple[Optional[int], float]:
         inter = fwd_closed & bwd_closed
@@ -146,6 +183,8 @@ class BidirectionalAStar:
                 best_cost = total
                 best_node = node
         return best_node, best_cost
+
+
 def _reconstruct_bi_path(
     fwd_parent: Dict[int, int],
     bwd_parent: Dict[int, int],
@@ -153,20 +192,37 @@ def _reconstruct_bi_path(
     start_node: int,
     goal_node: int,
 ) -> List[int]:
+    """Reconstruct the full path from start → meet → goal.
+
+    Forward half: follow fwd_parent from meet_node back to start_node.
+    Backward half: follow bwd_parent from meet_node toward goal_node.
+
+    In the backward search, bwd_parent[nid] = cid means "nid was reached
+    from cid during the backward expansion (cid is closer to goal)".
+    So following bwd_parent from meet_node walks toward goal_node.
+    """
+    # --- forward half: start → meet ---
     fwd: List[int] = []
     cur = meet_node
     while cur != start_node:
         fwd.append(cur)
-        cur = fwd_parent.get(cur, start_node)
+        nxt = fwd_parent.get(cur)
+        if nxt is None:
+            # Should never happen for a valid meeting node
+            break
+        cur = nxt
     fwd.append(start_node)
     fwd.reverse()
+
+    # --- backward half: meet → goal ---
     bwd: List[int] = []
     cur = meet_node
     while cur != goal_node:
-        nxt = bwd_parent.get(cur, goal_node)
-        if nxt == cur:
+        nxt = bwd_parent.get(cur)
+        if nxt is None:
+            # meet_node might be goal_node's immediate backward neighbour
             break
         cur = nxt
         bwd.append(cur)
+
     return fwd + bwd
-import math

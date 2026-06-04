@@ -77,11 +77,12 @@ class TestCostFunction(unittest.TestCase):
         s, d = cf.compute_both(tags, hour=21)
         self.assertGreater(d, s)
     def test_zero_weights(self):
+        """All weights zero → cost must be 0 (pure weighted sum, no length term)."""
         z = WeightCoefficients(tactile_paving=0, steps=0, surface=0,
                                 lighting=0, sidewalk=0, highway=0,
                                 incline=0, width=0)
         cf = CostFunction(z)
         c = cf.compute_static({"steps": "yes", "surface": "sand", "highway": "motorway"})
-        self.assertAlmostEqual(c, 0.02, places=4)
+        self.assertAlmostEqual(c, 0.0, places=4)
 if __name__ == "__main__":
     unittest.main()

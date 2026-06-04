@@ -169,18 +169,29 @@ class WeightCoefficients:
         )
 @dataclass
 class TimeSlot:
+    """Defines a time-of-day period with lighting and crowd multipliers.
+
+    lighting_multiplier: Applied to UNLIT segments during this period.
+        - >1.0 penalises unlit segments (night: 3.0 → triple cost)
+        - <1.0 discounts unlit segments (day: 0.5 → half cost, lighting matters less)
+    crowd_multiplier: Base crowd factor for the period.
+        - >1.0 means busier (rush hour, evening)
+        - <1.0 means quieter (late night)
+        Actual M_crowd = max(0.5, 1.0 + (crowd_multiplier - 1.0) * traffic_weight)
+    """
     name: str
     name_cn: str
     start_hour: int
     end_hour: int
     lighting_multiplier: float
     crowd_multiplier: float
+
 TIME_SLOTS: List[TimeSlot] = [
-    TimeSlot("dawn", "清晨", 5, 7, 1.5, 0.8),
-    TimeSlot("day", "白天", 7, 18, 0.5, 1.0),
-    TimeSlot("dusk", "傍晚", 18, 20, 1.5, 1.2),
-    TimeSlot("night", "夜间", 20, 23, 3.0, 1.5),
-    TimeSlot("late_night", "深夜", 23, 5, 2.0, 0.5),
+    TimeSlot("dawn",       "清晨",  5,  7, 1.5, 0.8),   # early morning, sparse crowd
+    TimeSlot("day",        "白天",  7, 18, 0.5, 1.0),   # daytime, normal crowd
+    TimeSlot("dusk",       "傍晚", 18, 20, 1.5, 1.2),   # dusk, moderate crowd
+    TimeSlot("night",      "夜间", 20, 23, 3.0, 1.5),   # night, heavy crowd in lit areas
+    TimeSlot("late_night", "深夜", 23,  5, 2.0, 0.8),   # late night, sparse crowd (was 0.5 → bug fix)
 ]
 def get_time_slot(hour: int) -> TimeSlot:
     for slot in TIME_SLOTS:
