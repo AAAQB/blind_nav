@@ -2,6 +2,8 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import numpy as np
+from scipy.spatial import KDTree
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -24,8 +26,10 @@ logger = logging.getLogger(__name__)
 _osm = OSMLoader()
 _loaded_graph = None
 _loaded_area = ""
+_spatial_tree: Optional[KDTree] = None   
+_spatial_ids:  Optional[list]   = None   
 def _ensure_graph(area: str = DEFAULT_AREA) -> bool:
-    global _loaded_graph, _loaded_area
+    global _loaded_graph, _loaded_area, _spatial_tree, _spatial_ids
     if _loaded_graph is not None and _loaded_area == area:
         return True
     cfg = AREA_CONFIGS.get(area)
@@ -38,9 +42,13 @@ def _ensure_graph(area: str = DEFAULT_AREA) -> bool:
         )
         _loaded_area = area
         logger.info("Graph loaded for '%s': %d nodes, %d edges",
-                     area, _loaded_graph.number_of_nodes(), _loaded_graph.number_of_edges())
+                    area, _loaded_graph.number_of_nodes(), _loaded_graph.number_of_edges())
+        nodes = list(_loaded_graph.nodes(data=True))
+        _spatial_ids = [nid for nid, _ in nodes]
+        coords = np.array([[nd.get("y", 0.0), nd.get("x", 0.0)] for _, nd in nodes])
+        _spatial_tree = KDTree(coords)
         return True
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to load graph for area '%s'", area)
         return False
 def _build_cost_fn(
@@ -58,18 +66,10 @@ def _build_cost_fn(
         return cf.compute_static(tags)
     return cost_fn
 def _find_nearest_node(lat: float, lon: float) -> Optional[int]:
-    if _loaded_graph is None or _loaded_graph.number_of_nodes() == 0:
+    if _spatial_tree is None:
         return None
-    best = None
-    best_d2 = float("inf")
-    for nid, nd in _loaded_graph.nodes(data=True):
-        dy = nd.get("y", 0.0) - lat
-        dx = nd.get("x", 0.0) - lon
-        d2 = dy * dy + dx * dx
-        if d2 < best_d2:
-            best_d2 = d2
-            best = nid
-    return best
+    _, idx = _spatial_tree.query([lat, lon])
+    return _spatial_ids[idx]
 FRONTEND_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "frontend", "public",
