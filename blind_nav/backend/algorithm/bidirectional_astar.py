@@ -43,148 +43,133 @@ class BidirectionalAStar:
         self._radius = meet_radius
         self._max_iter = max_iterations
 
-    def search(
-        self,
-        graph: nx.Graph,
-        start_node: int,
-        goal_node: int,
-        hour: Optional[int] = None,
-        progress_callback: Optional[Callable[[int, int, int], None]] = None,
-    ) -> Optional[Dict[str, Any]]:
-        if start_node not in graph or goal_node not in graph:
-            return None
-        if start_node == goal_node:
-            return {"path": [start_node], "cost": 0.0, "explored_count": 0, "meet_node": start_node}
+   def search(
+    self,
+    graph: nx.Graph,
+    start_node: int,
+    goal_node: int,
+    hour: Optional[int] = None,
+    progress_callback: Optional[Callable[[int, int, int], None]] = None,
+) -> Optional[Dict[str, Any]]:
+    if start_node not in graph or goal_node not in graph:
+        return None
+    if start_node == goal_node:
+        return {"path": [start_node], "cost": 0.0, "explored_count": 0, "meet_node": start_node}
 
-        fwd_frontier: List[_BiNode] = []
-        bwd_frontier: List[_BiNode] = []
-        h_sg = self._heuristic(graph, start_node, goal_node)
-        heapq.heappush(fwd_frontier, _BiNode(f_score=h_sg, g_score=0.0, node_id=start_node, direction=0))
-        heapq.heappush(bwd_frontier, _BiNode(f_score=h_sg, g_score=0.0, node_id=goal_node, direction=1))
+    fwd_frontier: List[_BiNode] = []
+    bwd_frontier: List[_BiNode] = []
+    h_sg = self._heuristic(graph, start_node, goal_node)
+    heapq.heappush(fwd_frontier, _BiNode(f_score=h_sg, g_score=0.0, node_id=start_node, direction=0))
+    heapq.heappush(bwd_frontier, _BiNode(f_score=h_sg, g_score=0.0, node_id=goal_node,  direction=1))
 
-        fwd_g: Dict[int, float] = {start_node: 0.0}
-        bwd_g: Dict[int, float] = {goal_node: 0.0}
-        fwd_parent: Dict[int, int] = {}
-        bwd_parent: Dict[int, int] = {}
+    fwd_g:      Dict[int, float] = {start_node: 0.0}
+    bwd_g:      Dict[int, float] = {goal_node:  0.0}
+    fwd_parent: Dict[int, int]   = {}
+    bwd_parent: Dict[int, int]   = {}
+    fwd_closed: Set[int]         = set()
+    bwd_closed: Set[int]         = set()
 
-        fwd_closed: Set[int] = set()
-        bwd_closed: Set[int] = set()
+    # 用列表包装，方便 _expand 内部直接写回，避免重复传参
+    best: List = [None, float("inf")]   # [meet_node, total_cost]
+    explored = 0
+    iterations = 0
 
-        best_meet: Optional[int] = None
-        best_cost = float("inf")
-        explored = 0
-        iterations = 0
+    while (fwd_frontier or bwd_frontier) and iterations < self._max_iter:
+        iterations += 1
+        f_best = fwd_frontier[0].f_score if fwd_frontier else float("inf")
+        b_best = bwd_frontier[0].f_score if bwd_frontier else float("inf")
 
-        while (fwd_frontier or bwd_frontier) and iterations < self._max_iter:
-            iterations += 1
-            f_best = fwd_frontier[0].f_score if fwd_frontier else float("inf")
-            b_best = bwd_frontier[0].f_score if bwd_frontier else float("inf")
-            if f_best <= b_best:
-                self._expand(graph, fwd_frontier, fwd_g, fwd_parent, fwd_closed,
-                             hour, 0, goal_node)
-            else:
-                self._expand(graph, bwd_frontier, bwd_g, bwd_parent, bwd_closed,
-                             hour, 1, start_node)
-            explored += 1
+        if f_best <= b_best:
+            self._expand(graph, fwd_frontier, fwd_g, fwd_parent, fwd_closed,
+                         hour, 0, goal_node,
+                         bwd_closed, bwd_g, best)
+        else:
+            self._expand(graph, bwd_frontier, bwd_g, bwd_parent, bwd_closed,
+                         hour, 1, start_node,
+                         fwd_closed, fwd_g, best)
+        explored += 1
 
-            # --- meeting detection ---
-            meet, total = self._find_meeting(fwd_closed, bwd_closed, fwd_g, bwd_g,
-                                              best_cost)
-            if meet is not None and total < best_cost:
-                best_meet = meet
-                best_cost = total
+        # 终止条件：两侧 frontier 最小 f 都超过当前最优代价
+        if best[1] < float("inf"):
+            f_min = fwd_frontier[0].f_score if fwd_frontier else float("inf")
+            b_min = bwd_frontier[0].f_score if bwd_frontier else float("inf")
+            if f_min >= best[1] and b_min >= best[1]:
+                break
 
-            # --- termination: both frontiers' minima exceed best known cost ---
-            if best_cost < float("inf"):
-                f_min = fwd_frontier[0].f_score if fwd_frontier else float("inf")
-                b_min = bwd_frontier[0].f_score if bwd_frontier else float("inf")
-                if f_min >= best_cost and b_min >= best_cost:
-                    break
+        if progress_callback:
+            progress_callback(explored, len(fwd_closed), len(bwd_closed))
 
-            if progress_callback:
-                progress_callback(explored, len(fwd_closed), len(bwd_closed))
+    if best[0] is None:
+        logger.warning("BiA* exhausted without meeting (explored=%d)", explored)
+        return None
 
-        if best_meet is None:
-            logger.warning("BiA* exhausted without meeting (explored=%d)", explored)
-            return None
+    path = _reconstruct_bi_path(fwd_parent, bwd_parent, best[0], start_node, goal_node)
+    logger.info("BiA* finished: explored=%d, cost=%.2f, meet=%s", explored, best[1], best[0])
+    return {
+        "path": path,
+        "cost": best[1],
+        "explored_count": explored,
+        "meet_node": best[0],
+        "forward_explored": len(fwd_closed),
+        "backward_explored": len(bwd_closed),
+    }
 
-        path = _reconstruct_bi_path(fwd_parent, bwd_parent, best_meet, start_node, goal_node)
-        logger.info("BiA* finished: explored=%d, cost=%.2f, meet=%s", explored, best_cost, best_meet)
-        return {
-            "path": path,
-            "cost": best_cost,
-            "explored_count": explored,
-            "meet_node": best_meet,
-            "forward_explored": len(fwd_closed),
-            "backward_explored": len(bwd_closed),
-        }
+  def _expand(
+    self,
+    graph: nx.Graph,
+    frontier: List[_BiNode],
+    g_score: Dict[int, float],
+    parent: Dict[int, int],
+    closed: Set[int],
+    hour: Optional[int],
+    direction: int,
+    opposite_goal: int,
+    opp_closed: Set[int],
+    opp_g: Dict[int, float],
+    best: List,
+) -> None:
+    if not frontier:
+        return
+    cur = heapq.heappop(frontier)
+    cid = cur.node_id
+    cg  = cur.g_score
 
-    def _expand(
-        self,
-        graph: nx.Graph,
-        frontier: List[_BiNode],
-        g_score: Dict[int, float],
-        parent: Dict[int, int],
-        closed: Set[int],
-        hour: Optional[int],
-        direction: int,
-        opposite_goal: int,
-    ) -> None:
-        if not frontier:
-            return
-        cur = heapq.heappop(frontier)
-        cid = cur.node_id
-        cg = cur.g_score
+    if cid in closed:
+        return
+    if cid in g_score and cg > g_score[cid]:
+        return
 
-        # --- stale-entry guard (same as WeightedAStar) ---
-        if cid in closed:
-            return
-        if cid in g_score and cg > g_score[cid]:
-            return
+    closed.add(cid)
 
-        closed.add(cid)
-        for nid in graph.neighbors(cid):
-            if nid in closed:
-                continue
-            tags = _edge_tags(graph, cid, nid)
-            ec = self._cost_fn(cid, nid, tags, hour)
-            tentative = g_score[cid] + ec
-            if nid not in g_score or tentative < g_score[nid]:
-                g_score[nid] = tentative
-                parent[nid] = cid
-                h = self._heuristic(graph, nid, opposite_goal)
-                heapq.heappush(frontier, _BiNode(
-                    f_score=tentative + self._w * h,
-                    g_score=tentative,
-                    node_id=nid,
-                    direction=direction,
-                ))
+    # O(1) 增量相遇检测：节点刚被 close 时就地查对面
+    if cid in opp_closed:
+        total = g_score[cid] + opp_g.get(cid, float("inf"))
+        if total < best[1]:
+            best[0], best[1] = cid, total
 
-    @staticmethod
+    for nid in graph.neighbors(cid):
+        if nid in closed:
+            continue
+        tags = _edge_tags(graph, cid, nid)
+        ec = self._cost_fn(cid, nid, tags, hour)
+        tentative = g_score[cid] + ec
+        if nid not in g_score or tentative < g_score[nid]:
+            g_score[nid] = tentative
+            parent[nid] = cid
+            h = self._heuristic(graph, nid, opposite_goal)
+            heapq.heappush(frontier, _BiNode(
+                f_score=tentative + self._w * h,
+                g_score=tentative,
+                node_id=nid,
+                direction=direction,
+            ))
     def _heuristic(graph: nx.Graph, a: int, b: int) -> float:
         pa = _node_pos(graph, a)
         pb = _node_pos(graph, b)
         return math.sqrt((pa[0] - pb[0]) ** 2 + (pa[1] - pb[1]) ** 2)
 
     @staticmethod
-    def _find_meeting(
-        fwd_closed: Set[int],
-        bwd_closed: Set[int],
-        fwd_g: Dict[int, float],
-        bwd_g: Dict[int, float],
-        best_so_far: float,
-    ) -> Tuple[Optional[int], float]:
-        inter = fwd_closed & bwd_closed
-        best_node: Optional[int] = None
-        best_cost = best_so_far
-        for node in inter:
-            total = fwd_g.get(node, float("inf")) + bwd_g.get(node, float("inf"))
-            if total < best_cost:
-                best_cost = total
-                best_node = node
-        return best_node, best_cost
-
-
+   
 def _reconstruct_bi_path(
     fwd_parent: Dict[int, int],
     bwd_parent: Dict[int, int],
