@@ -1,0 +1,17 @@
+# Core
+flask>=3.0
+flask-cors>=4.0
+networkx>=3.0
+
+# OSM
+osmnx>=1.9
+
+# Numerics
+numpy>=1.24
+scipy>=1.10
+
+# Testing
+pytest>=7.0
+
+# Linting (dev)
+ruff>=0.5

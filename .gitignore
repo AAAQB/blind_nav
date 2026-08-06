@@ -1,0 +1,8 @@
+﻿__pycache__/
+*.py[cod]
+*.pkl
+*.log
+cache/
+.venv/
+venv/
+.DS_Store

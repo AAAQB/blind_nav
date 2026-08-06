@@ -253,7 +253,6 @@ This fusion typically explores **far fewer nodes** than standard unidirectional 
 ## Project Structure
 
 ```
-blindnav/
 ├── backend/
 │   ├── __init__.py
 │   ├── app.py                  # Flask application entry point & API routes
