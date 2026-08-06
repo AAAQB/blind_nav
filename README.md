@@ -1,6 +1,12 @@
 # BlindNav — Smart Navigation for the Visually Impaired
 
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://python.org)
+[![Flask](https://img.shields.io/badge/Flask-3.0%2B-lightgrey)](https://flask.palletsprojects.com)
+[![React](https://img.shields.io/badge/Frontend-React+MapLibre-61dafb)](https://reactjs.org)
+[![OSMnx](https://img.shields.io/badge/OSM-Osmnx%201.9%2B-green)](https://osmnx.readthedocs.io)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
+---
 
 **BlindNav** is an accessibility-aware route planning system designed specifically for **visually impaired pedestrians**. It computes optimal walking routes by factoring in real-world street conditions — tactile paving, steps, surface quality, sidewalk availability, lighting, road width, and incline — using OpenStreetMap data and weighted cost functions.
 
