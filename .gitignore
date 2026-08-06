@@ -1,8 +1,5 @@
-﻿__pycache__/
-*.py[cod]
-*.pkl
-*.log
-cache/
+﻿# 环境与系统（仅忽略这些，其余文件一律保留并纳入版本控制）
 .venv/
 venv/
 .DS_Store
+Thumbs.db

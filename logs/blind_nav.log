@@ -1,0 +1,17 @@
+2026-06-17 18:32:10,209 INFO __main__: Pre-loading graph for default area 'kl'...
+2026-06-17 18:32:10,367 INFO __main__: Starting Waitress production server on port 5000
+2026-06-17 18:32:10,396 INFO waitress: Serving on http://0.0.0.0:5000
+2026-06-17 18:32:13,687 INFO __main__: Graph loaded for 'kl': 34725 nodes, 47224 edges
+2026-06-17 18:32:35,792 INFO backend.algorithm.bidirectional_astar: BiA* finished: explored=9863, cost=1064.50, meet=12540692282
+2026-06-17 18:33:01,700 INFO __main__: Cache hit for 12260602442:12116436782:blind:14:kl
+2026-06-17 18:33:04,450 INFO backend.algorithm.bidirectional_astar: BiA* finished: explored=9159, cost=803.85, meet=12260505910
+2026-06-17 18:33:06,859 INFO __main__: Cache hit for 12260602442:12116436782:blind:14:kl
+2026-06-17 18:33:07,851 INFO __main__: Cache hit for 12260602442:12116436782:blind:14:kl
+2026-06-17 18:33:10,783 INFO backend.algorithm.bidirectional_astar: BiA* finished: explored=8822, cost=715.00, meet=13424774073
+2026-06-17 18:33:14,502 INFO backend.algorithm.bidirectional_astar: BiA* finished: explored=9681, cost=619.00, meet=12540692282
+2026-06-17 18:33:16,828 INFO __main__: Cache hit for 12260602442:12116436782:blind:14:kl
+2026-06-17 18:33:17,216 INFO __main__: Cache hit for 12260602442:12116436782:blind:14:kl
+2026-06-17 18:33:19,937 INFO backend.algorithm.bidirectional_astar: BiA* finished: explored=8664, cost=746.60, meet=12260505910
+2026-06-17 18:33:24,136 INFO backend.algorithm.bidirectional_astar: BiA* finished: explored=10248, cost=599.25, meet=13424774073
+2026-06-17 18:33:29,463 INFO __main__: Graph loaded for 'berlin': 43539 nodes, 62798 edges
+2026-06-17 18:33:30,407 INFO backend.algorithm.bidirectional_astar: BiA* finished: explored=14069, cost=533.05, meet=1840326421
